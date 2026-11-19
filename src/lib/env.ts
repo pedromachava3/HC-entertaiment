@@ -7,6 +7,14 @@ export function publicEnv() {
   };
 }
 
+/**
+ * Chave service_role do Supabase (só servidor).
+ * Aceita também SUPABASE_ROLE_KEY — nome com que a variável foi criada na Vercel deste projecto.
+ */
+export function serviceRoleKey(): string | undefined {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ROLE_KEY || undefined;
+}
+
 /** Leituras públicas (eventos, galeria) só precisam do URL e da chave pública. */
 export function isPublicSupabaseConfigured(): boolean {
   const e = publicEnv();
@@ -15,7 +23,7 @@ export function isPublicSupabaseConfigured(): boolean {
 
 export function isSupabaseConfigured(): boolean {
   const e = publicEnv();
-  return Boolean(e.supabaseUrl && e.supabaseAnonKey && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(e.supabaseUrl && e.supabaseAnonKey && serviceRoleKey());
 }
 
 /** Prazo (minutos) para pagar uma encomenda antes de expirar. Padrão: 48 horas. */

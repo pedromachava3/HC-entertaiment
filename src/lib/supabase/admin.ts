@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { publicEnv } from "../env";
+import { publicEnv, serviceRoleKey } from "../env";
 
 let cached: SupabaseClient | null = null;
 
@@ -11,7 +11,7 @@ let cached: SupabaseClient | null = null;
 export function supabaseAdmin(): SupabaseClient {
   if (cached) return cached;
   const { supabaseUrl } = publicEnv();
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = serviceRoleKey();
   if (!supabaseUrl || !key) throw new Error("SUPABASE_NOT_CONFIGURED");
   cached = createClient(supabaseUrl, key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
