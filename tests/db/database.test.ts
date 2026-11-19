@@ -317,3 +317,26 @@ run("base de dados", () => {
     });
   });
 });
+
+run("atribuição inicial de papéis", () => {
+  it("só concede o papel depois de o email ser confirmado", async () => {
+    const url = new URL(ADMIN_URL!);
+    url.pathname = `/${DB}`;
+    const c = new pg.Client({ connectionString: url.toString() });
+    await c.connect();
+    try {
+      await c.query("insert into public.role_bootstrap (email, role) values ('novo@hc.test','admin')");
+      const u = await c.query("insert into auth.users (email) values ('Novo@hc.test') returning id");
+      const id = u.rows[0].id;
+      let r = await c.query("select count(*)::int n from public.user_roles where user_id=$1", [id]);
+      expect(r.rows[0].n).toBe(0);
+      await c.query("update auth.users set email_confirmed_at = now() where id=$1", [id]);
+      r = await c.query("select role from public.user_roles where user_id=$1", [id]);
+      expect(r.rows.map((x) => x.role)).toEqual(["admin"]);
+      const left = await c.query("select count(*)::int n from public.role_bootstrap");
+      expect(left.rows[0].n).toBe(0);
+    } finally {
+      await c.end();
+    }
+  });
+});
