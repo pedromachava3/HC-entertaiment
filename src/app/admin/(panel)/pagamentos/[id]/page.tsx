@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { ReviewPanel } from "@/components/admin/review-panel";
 import { DeliveryPanel } from "@/components/admin/delivery-panel";
 import { CancelOrderForm } from "@/components/admin/cancel-order-form";
+import { RegisterPaymentForm } from "@/components/admin/register-payment-form";
 import { Badge, Card } from "@/components/ui/primitives";
 import { PAYMENT_METHODS } from "@/lib/config";
 import { formatDateShort, formatDateTime, formatMZN } from "@/lib/format";
@@ -67,6 +68,13 @@ export default async function PaymentDetail(props: PageProps<"/admin/pagamentos/
                 payerPhone={formatPhone(pending.payer_phone)}
                 reference={pending.transaction_ref}
               />
+            </Card>
+          ) : null}
+
+          {order.status === "pending_payment" ? (
+            <Card className="p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-white/60">Registar pagamento recebido</h2>
+              <RegisterPaymentForm orderId={order.id} amount={formatMZN(order.total_cents)} defaultMethod={order.payment_method} defaultPhone={formatPhone(order.customer_whatsapp)} />
             </Card>
           ) : null}
 

@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Alert, Badge, Container } from "@/components/ui/primitives";
 import { Poster } from "@/components/site/poster";
 import { Countdown } from "@/components/site/countdown";
+import { ManualPurchase } from "@/components/site/manual-purchase";
 import { getEventBySlug } from "@/lib/data/events";
 import { isOnSale } from "@/lib/data/site";
 import { eventStartInstant, formatDateLong, formatMZN, formatTime, todayInMaputo } from "@/lib/format";
@@ -123,9 +124,18 @@ export default async function EventPage(props: PageProps<"/eventos/[slug]">) {
                 </div>
                 {event.door_info ? <p className="mt-3 text-sm text-mute">{event.door_info}</p> : null}
                 {onSale ? (
-                  <Link href={`/checkout/${event.id}`} className={buttonVariants({ size: "lg", className: "mt-6 w-full sm:w-auto" })}>
-                    <Ticket /> Comprar bilhetes
-                  </Link>
+                  <>
+                    <Link href={`/checkout/${event.id}`} className={buttonVariants({ size: "lg", className: "mt-6 w-full sm:w-auto" })}>
+                      <Ticket /> Comprar bilhetes
+                    </Link>
+                    <div className="mt-6">
+                      <ManualPurchase
+                        eventName={event.name}
+                        eventDate={event.event_date}
+                        types={event.ticket_types.map((t) => ({ name: t.name, priceCents: Number(t.price_cents) }))}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <p className="mt-4 text-sm text-mute">As vendas online não estão abertas de momento.</p>
                 )}

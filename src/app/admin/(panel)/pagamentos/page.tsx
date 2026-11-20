@@ -44,7 +44,11 @@ export default async function Payments(props: PageProps<"/admin/pagamentos">) {
 
   return (
     <div>
-      <PageHeader title="Pagamentos" description="Verifique cada transacção no M-Pesa/e-Mola antes de confirmar." />
+      <PageHeader
+        title="Pagamentos"
+        description="Verifique cada transacção no M-Pesa/e-Mola antes de confirmar."
+        actions={<Link href="/admin/pagamentos/nova" className={buttonVariants()}>+ Registar venda (WhatsApp)</Link>}
+      />
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap gap-2">
           {FILTERS.map((f) => (

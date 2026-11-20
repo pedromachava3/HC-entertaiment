@@ -46,7 +46,6 @@ export const checkoutSchema = z.object({
         .string()
         .min(3, "Indique o nome completo.")
         .max(120, "Nome demasiado longo.")
-        .refine((v) => v.includes(" "), "Indique o nome e o apelido.")
         .refine((v) => !/[<>]/.test(v), "O nome contém caracteres inválidos."),
     ),
   customerWhatsapp: phoneField("número de WhatsApp"),

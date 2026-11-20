@@ -48,7 +48,7 @@ describe("validação do checkout", () => {
   it("exige termos, privacidade, nome completo e método", () => {
     expect(checkoutSchema.safeParse({ ...base, acceptTerms: false }).success).toBe(false);
     expect(checkoutSchema.safeParse({ ...base, acceptPrivacy: false }).success).toBe(false);
-    expect(checkoutSchema.safeParse({ ...base, customerName: "Maria" }).success).toBe(false);
+    expect(checkoutSchema.safeParse({ ...base, customerName: "Ma" }).success).toBe(false);
     expect(checkoutSchema.safeParse({ ...base, customerName: "<script>x</script> y" }).success).toBe(false);
     expect(checkoutSchema.safeParse({ ...base, paymentMethod: "visa" }).success).toBe(false);
     expect(checkoutSchema.safeParse({ ...base, customerEmail: "nao-e-email" }).success).toBe(false);
@@ -57,5 +57,20 @@ describe("validação do checkout", () => {
     const ok = paymentReportSchema.safeParse({ accessKey: "a".repeat(43), method: "emola", payerPhone: "87 885 2846", transactionRef: "ABC123XYZ" });
     expect(ok.success).toBe(true);
     expect(paymentReportSchema.safeParse({ accessKey: "a".repeat(43), method: "emola", payerPhone: "87 885 2846", transactionRef: "<x>" }).success).toBe(false);
+  });
+});
+
+import { uuidv4 } from "@/lib/uuid";
+describe("uuid compatível", () => {
+  it("gera UUID v4 válido mesmo sem crypto.randomUUID", () => {
+    const orig = globalThis.crypto.randomUUID;
+    // @ts-expect-error simular navegador antigo
+    globalThis.crypto.randomUUID = undefined;
+    try {
+      const id = uuidv4();
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    } finally {
+      globalThis.crypto.randomUUID = orig;
+    }
   });
 });

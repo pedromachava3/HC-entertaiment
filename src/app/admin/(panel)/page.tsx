@@ -42,11 +42,14 @@ export default async function Dashboard() {
       <PageHeader
         title="Dashboard"
         description="Indicadores em tempo real."
-        actions={s.payments_reported > 0 ? (
-          <Link href="/admin/pagamentos?estado=payment_reported" className={buttonVariants()}>
-            Verificar {s.payments_reported} pagamento(s) <ArrowRight />
-          </Link>
-        ) : null}
+        actions={<>
+          <Link href="/admin/pagamentos/nova" className={buttonVariants({ variant: "outline" })}>+ Registar venda</Link>
+          {s.payments_reported > 0 ? (
+            <Link href="/admin/pagamentos?estado=payment_reported" className={buttonVariants()}>
+              Verificar {s.payments_reported} pagamento(s) <ArrowRight />
+            </Link>
+          ) : null}
+        </>}
       />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         {tiles.map(([label, value, href], i) => {

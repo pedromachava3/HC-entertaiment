@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Alert, Container } from "@/components/ui/primitives";
 import { CheckoutClient } from "./checkout-client";
+import { ManualPurchase } from "@/components/site/manual-purchase";
 import { getEventById } from "@/lib/data/events";
 import { isOnSale } from "@/lib/data/site";
 import { todayInMaputo } from "@/lib/format";
@@ -29,6 +30,15 @@ export default async function CheckoutPage(props: PageProps<"/checkout/[eventId]
             Este evento não está a aceitar novas compras de momento.
           </Alert>
         ) : (
+          <>
+          <div className="mt-8">
+            <ManualPurchase
+              eventName={event.name}
+              eventDate={event.event_date}
+              types={event.ticket_types.map((t) => ({ name: t.name, priceCents: Number(t.price_cents) }))}
+            />
+            <p className="mt-6 text-center text-sm text-white/50">— ou faça a encomenda aqui no site —</p>
+          </div>
           <CheckoutClient
             event={{
               id: event.id,
@@ -48,6 +58,7 @@ export default async function CheckoutPage(props: PageProps<"/checkout/[eventId]
               available: availableOf(t),
             }))}
           />
+          </>
         )}
       </Container>
     </div>

@@ -10,7 +10,10 @@ import { errorMessage } from "@/lib/errors";
 import { cancelOrder, reviewPayment } from "@/lib/services/payments";
 import { ensureTicketsPdf } from "@/lib/services/tickets";
 import { deleteImage } from "@/lib/services/images";
-import { publicEnv } from "@/lib/env";
+import { orderTtlMinutes, publicEnv } from "@/lib/env";
+import { randomUUID } from "node:crypto";
+import { normalizePhone } from "@/lib/phone";
+import { randomToken, sha256Hex } from "@/lib/security";
 
 export type ActionState = { ok?: boolean; error?: string; message?: string } | null;
 
@@ -365,4 +368,104 @@ export async function removeRoleAction(userId: string, role: "admin" | "staff"):
   await admin.from("user_roles").delete().eq("user_id", id.data).eq("role", role);
   revalidatePath("/admin/utilizadores");
   return { ok: true };
+}
+
+// ---------------- Vendas manuais (transferência + WhatsApp) ----------------
+
+const refSchema = z
+  .string()
+  .trim()
+  .min(4, "Indique a referência da transacção.")
+  .max(64)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9 .\-/]*$/, "Referência inválida.");
+
+/** Confirma o pagamento de uma encomenda já existente, com os dados verificados pelo administrador. */
+async function reportAndConfirm(orderId: string, adminId: string, method: "mpesa" | "emola", payerPhone: string, ref: string, note: string | null) {
+  const admin = supabaseAdmin();
+  const { data: subId, error } = await admin.rpc("report_payment", {
+    p_order_id: orderId, p_method: method, p_payer_phone: payerPhone, p_transaction_ref: ref, p_proof_path: null, p_proof_mime: null,
+  });
+  if (error) throw error;
+  return reviewPayment({ submissionId: subId as string, action: "confirm", adminId, note: note ?? "Pagamento verificado pelo administrador (registo manual)" });
+}
+
+export async function registerPaymentAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireAdmin();
+  const parsed = z
+    .object({
+      orderId: z.uuid(),
+      method: z.enum(["mpesa", "emola"]),
+      payerPhone: z.string().trim().min(1, "Indique o número que pagou."),
+      transactionRef: refSchema,
+      confirmed: z.literal("yes", { error: "Confirme que verificou o recebimento." }),
+    })
+    .safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return { error: firstError(parsed.error) };
+  const phone = normalizePhone(parsed.data.payerPhone);
+  if (!phone) return { error: "Número inválido. Ex.: 84 123 4567" };
+  try {
+    const r = await reportAndConfirm(parsed.data.orderId, user.id, parsed.data.method, phone, parsed.data.transactionRef, null);
+    revalidatePath("/admin", "layout");
+    if (r.pdfError) return { error: r.pdfError };
+    return { ok: true, message: `Pagamento registado. ${r.tickets_created} bilhete(s) emitido(s).` };
+  } catch (e) {
+    return { error: errorMessage(e) };
+  }
+}
+
+/** Venda registada pelo administrador (cliente pagou por transferência e enviou o comprovativo pelo WhatsApp). */
+export async function manualSaleAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireAdmin();
+  const base = z
+    .object({
+      eventId: z.uuid({ error: "Escolha o evento." }),
+      customerName: z.string().trim().min(3, "Indique o nome do cliente.").max(120),
+      customerWhatsapp: z.string().trim().min(1, "Indique o WhatsApp do cliente."),
+      method: z.enum(["mpesa", "emola"], { error: "Escolha M-Pesa ou e-Mola." }),
+      payerPhone: z.string().trim().optional(),
+      transactionRef: refSchema,
+      confirmed: z.literal("yes", { error: "Confirme que verificou o recebimento do valor." }),
+    })
+    .safeParse(Object.fromEntries(fd));
+  if (!base.success) return { error: firstError(base.error) };
+  const d = base.data;
+  const whatsapp = normalizePhone(d.customerWhatsapp);
+  if (!whatsapp) return { error: "WhatsApp do cliente inválido. Ex.: 84 123 4567" };
+  const payer = d.payerPhone ? normalizePhone(d.payerPhone) : whatsapp;
+  if (!payer) return { error: "Número que pagou inválido." };
+
+  const items: { ticket_type_id: string; quantity: number }[] = [];
+  for (const [k, v] of fd.entries()) {
+    if (!k.startsWith("qty_")) continue;
+    const q = Number(v);
+    const id = k.slice(4);
+    if (Number.isInteger(q) && q > 0 && uuid.safeParse(id).success) items.push({ ticket_type_id: id, quantity: q });
+  }
+  if (items.length === 0) return { error: "Indique a quantidade de bilhetes." };
+
+  const admin = supabaseAdmin();
+  const { data, error } = await admin.rpc("create_order", {
+    p_event_id: d.eventId,
+    p_items: items,
+    p_customer_name: d.customerName,
+    p_customer_whatsapp: whatsapp,
+    p_customer_email: null,
+    p_payment_method: d.method,
+    p_access_token_hash: sha256Hex(randomToken()),
+    p_idempotency_key: randomUUID(),
+    p_ttl_minutes: orderTtlMinutes(),
+    p_ip_hash: null,
+  });
+  if (error) return { error: errorMessage(error) };
+  const order = (data as { order_id: string; order_code: string }[])[0];
+  try {
+    const r = await reportAndConfirm(order.order_id, user.id, d.method, payer, d.transactionRef, "Venda manual (transferência + WhatsApp)");
+    revalidatePath("/admin", "layout");
+    if (r.pdfError) return { error: r.pdfError };
+  } catch (e) {
+    // Liberta os bilhetes reservados se a confirmação falhar (ex.: referência repetida).
+    await cancelOrder(order.order_id, user.id, "Venda manual não concluída").catch(() => {});
+    return { error: errorMessage(e) };
+  }
+  redirect(`/admin/pagamentos/${order.order_id}`);
 }

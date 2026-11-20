@@ -11,6 +11,7 @@ import { formatPhone } from "@/lib/phone";
 import { computeTotals } from "@/lib/pricing";
 import { checkoutSchema } from "@/lib/validation";
 import { cn } from "@/lib/utils";
+import { uuidv4 } from "@/lib/uuid";
 
 type TypeView = {
   id: string;
@@ -35,7 +36,7 @@ export function CheckoutClient({ event, types }: { event: EventView; types: Type
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   // Chave de idempotência: um duplo clique ou reenvio não cria duas encomendas.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => uuidv4());
 
   const totals = useMemo(() => computeTotals(types, qty), [types, qty]);
 
