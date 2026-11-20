@@ -340,3 +340,69 @@ run("atribuição inicial de papéis", () => {
     }
   });
 });
+
+run("pagamentos automáticos (PaySuite)", () => {
+  async function client() {
+    const url = new URL(ADMIN_URL!);
+    url.pathname = `/${DB}`;
+    const c = new pg.Pool({ connectionString: url.toString(), max: 10 });
+    c.on("connect", (x) => void x.query("set role service_role"));
+    return c;
+  }
+  async function newOrder(p: pg.Pool, qty: number) {
+    const ev = await p.query("select id from public.events where slug='good-vibes-at-summer-2026'");
+    const tt = await p.query("select id from public.ticket_types where event_id=$1 and name='Normal'", [ev.rows[0].id]);
+    const { rows } = await p.query(
+      "select * from public.create_order($1,$2,'Cliente Online Teste','+258841234567',null,'mpesa',$3,$4,2880,null)",
+      [ev.rows[0].id, JSON.stringify([{ ticket_type_id: tt.rows[0].id, quantity: qty }]), "a".repeat(64), randomUUID()],
+    );
+    const pid = randomUUID();
+    await p.query("insert into public.online_payments (order_id, provider_payment_id, checkout_url, amount_cents) values ($1,$2,'https://paysuite.tech/x',$3)", [rows[0].order_id, pid, rows[0].total_cents]);
+    return { orderId: rows[0].order_id as string, total: Number(rows[0].total_cents), pid };
+  }
+  const confirm = (p: pg.Pool, pid: string, cents: number, tx: string = randomUUID()) =>
+    p.query("select * from public.confirm_online_payment($1,$2,$3,'mpesa','{}'::jsonb)", [pid, cents, tx]).then((r) => r.rows[0]);
+
+  it("confirma, emite bilhetes e é idempotente com webhooks repetidos/simultâneos", async () => {
+    const p = await client();
+    try {
+      const o = await newOrder(p, 2);
+      const res = await Promise.all(Array.from({ length: 5 }, () => confirm(p, o.pid, o.total, "tx-fixa-1")));
+      expect(res.filter((r) => r.result === "confirmed").length).toBe(1);
+      expect(res.reduce((s, r) => s + r.tickets_created, 0)).toBe(2);
+      const st = await p.query("select status, confirmed_by from public.orders where id=$1", [o.orderId]);
+      expect(st.rows[0].status).toBe("paid");
+      expect(st.rows[0].confirmed_by).toBeNull();
+    } finally { await p.end(); }
+  });
+  it("valor diferente → não emite bilhetes e fica para verificação", async () => {
+    const p = await client();
+    try {
+      const o = await newOrder(p, 1);
+      const r = await confirm(p, o.pid, o.total - 100);
+      expect(r.result).toBe("needs_review");
+      const t = await p.query("select count(*)::int n from public.tickets where order_id=$1", [o.orderId]);
+      expect(t.rows[0].n).toBe(0);
+    } finally { await p.end(); }
+  });
+  it("encomenda expirada → não emite bilhetes (verificar stock/reembolso)", async () => {
+    const p = await client();
+    try {
+      const o = await newOrder(p, 1);
+      await p.query("update public.orders set expires_at = now() - interval '1 minute' where id=$1", [o.orderId]);
+      await p.query("select public.expire_stale_orders()");
+      const r = await confirm(p, o.pid, o.total);
+      expect(r.result).toBe("needs_review");
+    } finally { await p.end(); }
+  });
+  it("pagamento desconhecido é recusado e a mesma transacção não serve duas encomendas", async () => {
+    const p = await client();
+    try {
+      await expect(confirm(p, randomUUID(), 100)).rejects.toThrow(/ONLINE_PAYMENT_NOT_FOUND/);
+      const a = await newOrder(p, 1);
+      const b = await newOrder(p, 1);
+      await confirm(p, a.pid, a.total, "tx-unica");
+      await expect(confirm(p, b.pid, b.total, "tx-unica")).rejects.toThrow(/duplicate key/);
+    } finally { await p.end(); }
+  });
+});

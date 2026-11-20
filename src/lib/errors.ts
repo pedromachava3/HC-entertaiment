@@ -29,6 +29,8 @@ const MESSAGES: Record<string, string> = {
   IMAGE_INVALID_TYPE: "Formato inválido. Envie JPG, JPEG, PNG ou WebP.",
   INVALID_IMAGE: "Não foi possível ler a imagem. O ficheiro pode estar corrompido.",
   SUPABASE_NOT_CONFIGURED: "O sistema ainda não está configurado.",
+  PAYSUITE_ERROR: "O serviço de pagamento não respondeu. Tente novamente ou use a transferência manual.",
+  PAYSUITE_NOT_CONFIGURED: "O pagamento automático ainda não está disponível.",
   RATE_LIMITED: "Demasiados pedidos. Aguarde um momento e tente novamente.",
 };
 

@@ -12,7 +12,7 @@ export default defineConfig({
   use: { baseURL, trace: "retain-on-failure", locale: "pt-PT", timezoneId: "Africa/Maputo" },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], channel } },
-    { name: "mobile", use: { ...devices["iPhone 13"], channel } },
+    { name: "mobile", use: { ...devices["iPhone 13"], defaultBrowserType: "chromium", channel } },
   ],
   webServer: useLocal
     ? { command: "npx next start -p 3100", url: baseURL, reuseExistingServer: true, timeout: 120_000 }

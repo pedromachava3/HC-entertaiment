@@ -5,6 +5,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { Alert, Badge, Card, Container } from "@/components/ui/primitives";
 import { CopyButton } from "@/components/ui/copy-button";
 import { PaymentReportForm } from "./payment-report-form";
+import { PayOnlineButton } from "./pay-online-button";
+import { AutoRefresh } from "./auto-refresh";
+import { isOnlinePaymentEnabled } from "@/lib/payments/paysuite";
+import { reconcileOrderOnlinePayments } from "@/lib/services/online-payments";
 import { getOrderForCustomer, publicOrderView } from "@/lib/data/orders";
 import { PAYMENT_METHODS } from "@/lib/config";
 import { formatAmount, formatDateLong, formatDateTime, formatMZN, formatTime } from "@/lib/format";
@@ -18,7 +22,14 @@ export default async function OrderPage(props: PageProps<"/encomenda/[referencia
   const { referencia } = await props.params;
   const sp = await props.searchParams;
   const key = typeof sp.k === "string" ? sp.k : null;
-  const raw = isSupabaseConfigured() ? await getOrderForCustomer(decodeURIComponent(referencia), key) : null;
+  const code = decodeURIComponent(referencia);
+  let raw = isSupabaseConfigured() ? await getOrderForCustomer(code, key) : null;
+  const returnedFromCheckout = sp.pago === "1";
+  // Ao voltar da PaySuite, confirma activamente o estado junto da API (complementa o webhook).
+  if (raw && returnedFromCheckout && raw.status === "pending_payment" && isOnlinePaymentEnabled()) {
+    if (await reconcileOrderOnlinePayments(raw.id)) raw = await getOrderForCustomer(code, key);
+  }
+  const online = isOnlinePaymentEnabled();
 
   if (!raw) {
     return (
@@ -55,7 +66,13 @@ export default async function OrderPage(props: PageProps<"/encomenda/[referencia
 
         {/* ===== Estado ===== */}
         <div className="mt-8">
-          {order.status === "pending_payment" ? (
+          {order.status === "pending_payment" && returnedFromCheckout && online ? (
+            <StatusBanner tone="amber" icon={<Hourglass />} title="A CONFIRMAR O PAGAMENTO…">
+              <AutoRefresh />
+              Se já confirmou com o PIN no telemóvel, aguarde: esta página actualiza-se sozinha e os bilhetes aparecem assim que a
+              operadora confirmar. Se cancelou, pode tentar novamente abaixo.
+            </StatusBanner>
+          ) : order.status === "pending_payment" ? (
             <StatusBanner tone="amber" icon={<Clock />} title="AGUARDA PAGAMENTO">
               {order.expires_at ? <>Efectue o pagamento até <strong>{formatDateTime(order.expires_at)}</strong>. Depois desse prazo a encomenda expira.</> : null}
             </StatusBanner>
@@ -88,7 +105,15 @@ export default async function OrderPage(props: PageProps<"/encomenda/[referencia
                     A comunicação anterior não foi validada{latest?.status === "rejected" ? "" : ""}. Verifique os dados e comunique novamente.
                   </Alert>
                 ) : null}
-                <h2 className="font-display text-3xl uppercase">Instruções de pagamento</h2>
+                {online ? (
+                  <div className="mb-6">
+                    <h2 className="mb-4 font-display text-3xl uppercase">Pagar agora</h2>
+                    <PayOnlineButton code={order.code} accessKey={key!} amount={formatMZN(order.total_cents)} />
+                  </div>
+                ) : null}
+                <details open={!online} className="group">
+                <summary className={online ? "cursor-pointer text-sm text-white/60 hover:text-white" : "hidden"}>Prefiro transferir manualmente</summary>
+                <h2 className="mt-4 font-display text-3xl uppercase">Instruções de pagamento</h2>
                 <ol className="mt-4 space-y-2 text-sm text-white/75">
                   <li>1. Abra o {method.label} no seu telemóvel e escolha transferir dinheiro.</li>
                   <li>2. Transfira <strong className="text-white">exactamente {formatMZN(order.total_cents)}</strong> para o número abaixo.</li>
@@ -108,6 +133,7 @@ export default async function OrderPage(props: PageProps<"/encomenda/[referencia
                 <div className="mt-6">
                   <PaymentReportForm code={order.code} accessKey={key!} defaultMethod={order.payment_method} />
                 </div>
+                </details>
               </Card>
             ) : null}
 

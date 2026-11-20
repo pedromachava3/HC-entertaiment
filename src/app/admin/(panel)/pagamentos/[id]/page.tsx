@@ -18,7 +18,9 @@ import { ORDER_STATUS_LABEL, TICKET_STATUS_LABEL, orderStatusTone } from "@/lib/
 const AUDIT_LABEL: Record<string, string> = {
   order_created: "Encomenda criada", payment_reported: "Pagamento comunicado pelo cliente", kept_pending: "Mantido pendente",
   rejected: "Comprovativo rejeitado", confirmed: "Pagamento confirmado", confirm_repeated: "Confirmação repetida (ignorada)",
-  tickets_issued: "Bilhetes emitidos", expired: "Encomenda expirada", cancelled: "Encomenda cancelada", pdf_generated: "PDF gerado",
+  tickets_issued: "Bilhetes emitidos", online_checkout_created: "Cliente iniciou pagamento automático (PaySuite)",
+  online_payment_confirmed: "Pagamento automático confirmado (PaySuite)", online_payment_failed: "Pagamento automático falhou/cancelado",
+  online_payment_needs_review: "Pagamento automático requer verificação", expired: "Encomenda expirada", cancelled: "Encomenda cancelada", pdf_generated: "PDF gerado",
 };
 const SUB_LABEL = { pending: "Em verificação", approved: "Aprovado", rejected: "Rejeitado" } as const;
 
@@ -29,9 +31,10 @@ export default async function PaymentDetail(props: PageProps<"/admin/pagamentos/
   const order = await getOrderById(id);
   if (!order) notFound();
   const admin = supabaseAdmin();
-  const [{ data: audit }, { data: deliveries }] = await Promise.all([
+  const [{ data: audit }, { data: deliveries }, { data: onlinePays }] = await Promise.all([
     admin.from("payment_audit_logs").select("*").eq("order_id", id).order("created_at", { ascending: true }),
     admin.from("ticket_delivery_logs").select("*").eq("order_id", id).order("created_at", { ascending: true }),
+    admin.from("online_payments").select("*").eq("order_id", id).order("created_at", { ascending: false }),
   ]);
   const actorIds = [...new Set([...(audit ?? []), ...(deliveries ?? [])].map((a) => a.actor_id).filter(Boolean))] as string[];
   const emails = new Map<string, string>();
@@ -78,6 +81,27 @@ export default async function PaymentDetail(props: PageProps<"/admin/pagamentos/
                 sent={order.delivery_status === "sent"}
                 hasPdf={Boolean(order.tickets_pdf_path)}
               />
+            </Card>
+          ) : null}
+
+          {(onlinePays ?? []).length ? (
+            <Card className="p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-white/60">Pagamentos automáticos (PaySuite)</h2>
+              <div className="space-y-3">
+                {(onlinePays ?? []).map((p) => (
+                  <div key={p.id} className="rounded-xl border border-white/10 p-4 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold">{formatMZN(p.amount_cents)}{p.method ? ` · ${p.method}` : ""}</span>
+                      <Badge tone={p.status === "paid" ? "green" : p.status === "needs_review" ? "red" : p.status === "failed" ? "grey" : "amber"}>
+                        {{ created: "Iniciado", paid: "Pago", failed: "Falhou/cancelado", needs_review: "Verificar" }[p.status as string] ?? p.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 font-mono text-xs text-white/50">PaySuite {p.provider_payment_id}{p.provider_transaction_id ? ` · Tx ${p.provider_transaction_id}` : ""}</p>
+                    <p className="text-xs text-white/50">{formatDateTime(p.created_at)}{p.paid_at ? ` → pago ${formatDateTime(p.paid_at)}` : ""}</p>
+                    {p.review_reason ? <p className="mt-1 text-hc-red">{p.review_reason}</p> : null}
+                  </div>
+                ))}
+              </div>
             </Card>
           ) : null}
 

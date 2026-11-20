@@ -84,6 +84,8 @@ Os restantes utilizadores (administradores ou funcionários de validação) são
 | `TICKET_SIGNING_SECRET` | **segredo** | assina os QR Codes (≥ 32 caracteres). Não alterar depois de emitir bilhetes |
 | `CRON_SECRET` | **segredo** | protege `/api/cron/expire-orders` |
 | `ORDER_PENDING_TTL_MINUTES` | servidor | prazo de pagamento (padrão 2880 = 48 h) |
+| `PAYSUITE_API_TOKEN` | **segredo** | token da API PaySuite (activa o pagamento automático) |
+| `PAYSUITE_WEBHOOK_SECRET` | **segredo** | Webhook Token `whsec_…` da PaySuite (verificação das notificações) |
 
 ## Scripts
 
@@ -107,7 +109,19 @@ Os restantes utilizadores (administradores ou funcionários de validação) são
 5. Domínio próprio: **Project → Settings → Domains** (HTTPS automático) e actualize `NEXT_PUBLIC_SITE_URL`
    e os URLs de redireccionamento do Supabase.
 
-## Como funcionam os pagamentos (versão actual: confirmação manual)
+## Pagamento automático (PaySuite — M-Pesa / e-Mola)
+
+Quando `PAYSUITE_API_TOKEN` e `PAYSUITE_WEBHOOK_SECRET` estão configurados, a página da encomenda mostra **PAGAR AGORA**:
+
+1. O servidor cria um pedido de pagamento na PaySuite (`POST /payments`, valor lido da BD, referência = código da encomenda).
+2. O cliente vai para a página segura da PaySuite, escolhe M-Pesa/e-Mola, indica o número e confirma com o **PIN no telemóvel** (o site nunca recebe PIN/OTP).
+3. A PaySuite envia o webhook `payment.success` para `/api/webhooks/paysuite`, assinado com HMAC-SHA256 (`X-Webhook-Signature`). Sem assinatura válida o pedido é recusado.
+4. A função `confirm_online_payment` confirma a encomenda e emite os bilhetes numa transacção idempotente. Se o valor não coincidir ou a encomenda já tiver expirado, nada é emitido e o pagamento fica marcado **Verificar** no painel.
+5. Quando o cliente regressa, o servidor também consulta a PaySuite (`GET /payments/{id}`) — confirmação mesmo que o webhook se atrase.
+
+O pagamento manual continua disponível como alternativa ("Prefiro transferir manualmente").
+
+## Como funcionam os pagamentos manuais
 
 1. O servidor cria a encomenda (código `HC-AAAA-NNNNNN`, gerado na BD sem repetições) com os preços **lidos da BD**.
 2. O cliente transfere para **M-Pesa +258 84 542 5186** ou **e-Mola +258 87 885 2846** e comunica a referência.
