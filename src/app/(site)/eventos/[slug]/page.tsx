@@ -13,6 +13,12 @@ import { eventStartInstant, formatDateLong, formatMZN, formatTime, todayInMaputo
 import { posterUrl } from "@/lib/storage";
 import { availableOf, EVENT_STATUS_LABEL } from "@/lib/types";
 import { COMPANY } from "@/lib/config";
+import { publicEnv } from "@/lib/env";
+
+function absUrl(u: string | null) {
+  if (!u) return null;
+  return u.startsWith("/") ? `${publicEnv().siteUrl}${u}` : u;
+}
 
 export async function generateMetadata(props: PageProps<"/eventos/[slug]">): Promise<Metadata> {
   const { slug } = await props.params;
@@ -21,7 +27,7 @@ export async function generateMetadata(props: PageProps<"/eventos/[slug]">): Pro
   const img = posterUrl(e.poster?.display_path);
   const desc = `${formatDateLong(e.event_date)}${e.venue ? ` · ${e.venue}` : ""}. ${COMPANY.name}.`;
   return {
-    title: e.name,
+    title: `${e.name} — ${formatDateLong(e.event_date, false)}`,
     description: desc,
     alternates: { canonical: `/eventos/${e.slug}` },
     openGraph: { title: e.name, description: desc, images: img ? [{ url: img }] : undefined },
@@ -43,11 +49,19 @@ export default async function EventPage(props: PageProps<"/eventos/[slug]">) {
     name: event.name,
     startDate: eventStartInstant(event.event_date, event.start_time).toISOString(),
     eventStatus: event.status === "cancelled" ? "https://schema.org/EventCancelled" : "https://schema.org/EventScheduled",
-    location: event.venue ? { "@type": "Place", name: event.venue, address: place || COMPANY.location } : undefined,
-    image: posterUrl(event.poster?.display_path) ?? undefined,
-    organizer: { "@type": "Organization", name: COMPANY.name },
+    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+    description: event.description ?? `${event.name} — ${COMPANY.name}`,
+    location: {
+      "@type": "Place",
+      name: event.venue ?? "A definir",
+      address: { "@type": "PostalAddress", streetAddress: place || undefined, addressLocality: event.city ?? undefined, addressCountry: "MZ" },
+    },
+    image: [absUrl(posterUrl(event.poster?.display_path))].filter(Boolean),
+    organizer: { "@type": "Organization", name: COMPANY.name, url: publicEnv().siteUrl },
+    performer: event.lineup.slice(0, 10).map((n) => ({ "@type": "PerformingGroup", name: n })),
     offers: event.ticket_types.map((t) => ({
       "@type": "Offer", name: t.name, price: t.price_cents / 100, priceCurrency: "MZN",
+      url: `${publicEnv().siteUrl}/eventos/${event.slug}`,
       availability: availableOf(t) > 0 ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
     })),
   };

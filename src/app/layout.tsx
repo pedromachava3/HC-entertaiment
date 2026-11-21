@@ -9,10 +9,14 @@ const siteUrl = publicEnv().siteUrl;
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: `${COMPANY.name} — ${COMPANY.slogan}`,
+    default: `${COMPANY.name} (${COMPANY.fullName}) — Eventos e bilhetes em Matola`,
     template: `%s · ${COMPANY.name}`,
   },
-  description: `${COMPANY.fullName}: ${COMPANY.sector.toLowerCase()} em ${COMPANY.location}. Compre bilhetes online com M-Pesa ou e-Mola.`,
+  description: `Site oficial da ${COMPANY.name} (${COMPANY.fullName}): produção, promoção e organização de eventos e festas em Matola, Moçambique. Good Vibes e outras festas — compre bilhetes com M-Pesa ou e-Mola. ${COMPANY.slogan}`,
+  keywords: ["HC Entertainment", "Hot Crazy Entertainment", "HC Entertainment Matola", "festas Matola", "eventos Matola", "Good Vibes", "bilhetes Moçambique", "M-Pesa", "e-Mola"],
+  alternates: { canonical: "/" },
+  verification: process.env.GOOGLE_SITE_VERIFICATION ? { google: process.env.GOOGLE_SITE_VERIFICATION } : undefined,
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large" } },
   applicationName: COMPANY.name,
   openGraph: {
     type: "website",

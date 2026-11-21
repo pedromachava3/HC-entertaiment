@@ -11,6 +11,7 @@ import { getPastEvents } from "@/lib/data/events";
 import { getFeaturedEvent, isOnSale } from "@/lib/data/site";
 import { eventStartInstant, formatDateLong, formatMZN, formatTime, monthShort } from "@/lib/format";
 import { posterUrl } from "@/lib/storage";
+import { publicEnv } from "@/lib/env";
 import { availableOf } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -23,8 +24,30 @@ export default async function HomePage() {
   const buyHref = featured && onSale ? `/checkout/${featured.id}` : "/eventos";
   const bg = posterUrl(featured?.poster?.thumb_path);
 
+  const site = publicEnv().siteUrl;
+  const orgJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${site}/#organizacao`,
+        name: COMPANY.name,
+        alternateName: [COMPANY.fullName, "HC", "Hot Crazy"],
+        url: site,
+        logo: `${site}/brand/hc-logo.png`,
+        slogan: COMPANY.slogan,
+        description: COMPANY.tagline,
+        telephone: COMPANY.whatsapp.e164,
+        address: { "@type": "PostalAddress", addressLocality: "Matola", addressRegion: "Maputo", addressCountry: "MZ" },
+        contactPoint: { "@type": "ContactPoint", telephone: COMPANY.whatsapp.e164, contactType: "customer service", availableLanguage: ["Portuguese"] },
+      },
+      { "@type": "WebSite", "@id": `${site}/#website`, url: site, name: COMPANY.name, inLanguage: "pt-MZ", publisher: { "@id": `${site}/#organizacao` } },
+    ],
+  };
+
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd).replace(/</g, "\\u003c") }} />
       {/* ================= HERO ================= */}
       <section className="relative isolate overflow-hidden pt-28 pb-20 sm:pt-36 lg:min-h-[100dvh] lg:pb-28">
         {bg ? (
